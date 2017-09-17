@@ -1,5 +1,6 @@
 import h5py, numpy as np
 from os.path import join
+import keras.backend as K
 
 def load_data(mydir):
     train = h5py.File(join(mydir,'train.h5.batch1'))
@@ -19,3 +20,6 @@ def set_trainability(model, trainable=False):
 	model.trainable = trainable
 	for layer in model.layers:
 		layer.trainable = trainable
+
+def modified_binary_crossentropy(target, output):
+    return -1.0 * K.mean(target*output)

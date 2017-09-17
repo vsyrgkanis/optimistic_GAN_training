@@ -28,7 +28,7 @@ def build_generator(latent_size, seqlen, nchannel):
     model.add(Activation('tanh'))
     return model
 
-def build_discriminator(seqlen, nchannel):
+def build_discriminator(seqlen, nchannel, output_activation = 'sigmoid'):
     model = Sequential()
     model.add(Convolution2D(16,1,3,
                             border_mode='same',
@@ -39,5 +39,5 @@ def build_discriminator(seqlen, nchannel):
     model.add(Dense(32))
     model.add(Activation('tanh'))
     model.add(Dense(1))
-    model.add(Activation('sigmoid'))
+    model.add(Activation(output_activation))
     return model
