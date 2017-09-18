@@ -9,6 +9,7 @@ from os.path import join,exists
 from os import system, makedirs
 
 from PIL import Image
+from functools import partial
 from keras.datasets import mnist
 import keras.backend as K
 from keras.optimizers import Adam, RMSprop, SGD, Adagrad
@@ -61,6 +62,7 @@ if __name__ == '__main__':
     batch_size = args.batch_size
     latent_size = 50
     numdisplay = 100000
+    GRADIENT_PENALTY_WEIGHT = 0.01
 
     # Optimizer
     if args.optimizer == 'SGD':
@@ -81,16 +83,17 @@ if __name__ == '__main__':
     fake_label = -1 if args.network_type == 'wgan' else 0
     output_activation = 'linear' if args.network_type == 'wgan' else 'sigmoid'
 
+    # Load the data
+    (X_train, y_train), (X_test, y_test) = utils.load_data(join(args.datadir, 'embed/CV0'))
+    X_train = (X_train.astype(np.float32) - 0.5) / 0.5
+    X_test = (X_test.astype(np.float32) - 0.5) / 0.5
+    num_train, num_test = X_train.shape[0], X_test.shape[0]
+
     # build the discriminator
     discriminator = models.build_discriminator(args.seqlen, args.nchannel, output_activation=output_activation)
-    utils.set_trainability(discriminator, True)
-    discriminator.compile(optimizer=d_optim,
-                          loss=loss_func)
 
     # build the generator
     generator = models.build_generator(latent_size, args.seqlen, args.nchannel)
-    generator.compile(optimizer='SGD',
-                      loss='binary_crossentropy')
 
     # we only want to be able to train generation for the combined model
     latent = Input(shape=(latent_size, ))
@@ -101,11 +104,27 @@ if __name__ == '__main__':
     combined.compile(optimizer=g_optim,
                      loss=loss_func)
 
-    # Load the data
-    (X_train, y_train), (X_test, y_test) = utils.load_data(join(args.datadir, 'embed/CV0'))
-    X_train = (X_train.astype(np.float32) - 0.5) / 0.5
-    X_test = (X_test.astype(np.float32) - 0.5) / 0.5
-    num_train, num_test = X_train.shape[0], X_test.shape[0]
+    # The actual discriminator model
+    utils.set_trainability(discriminator, True)
+    real_samples = Input(shape=X_train.shape[1:])
+    generated_samples_for_discriminator = Input(shape=X_train.shape[1:])
+    discriminator_output_from_generator = discriminator(generated_samples_for_discriminator)
+    discriminator_output_from_real_samples = discriminator(real_samples)
+
+    averaged_samples = utils.RandomWeightedAverage()([real_samples, generated_samples_for_discriminator])
+    averaged_samples_out = discriminator(averaged_samples)
+    partial_gp_loss = partial(utils.gradient_penalty_loss,
+                              averaged_samples=averaged_samples,
+                              gradient_penalty_weight=GRADIENT_PENALTY_WEIGHT)
+    partial_gp_loss.__name__ = 'gradient_penalty'  # Functions need names or Keras will throw an error
+    discriminator_model = Model(inputs=[real_samples,
+                                        generated_samples_for_discriminator],
+                                outputs=[discriminator_output_from_real_samples,
+                                         discriminator_output_from_generator,
+                                         averaged_samples_out])
+
+    discriminator_model.compile(optimizer=d_optim,
+                          loss=[loss_func, loss_func, partial_gp_loss])
 
     # Training
     train_history = defaultdict(list)
@@ -127,27 +146,18 @@ if __name__ == '__main__':
             progress_bar.update(index)
 
             # Train D on real images
-            utils.set_trainability(discriminator, True)
+            utils.set_trainability(discriminator_model, True)
             image_batch = X_train[index * batch_size:(index + 1) * batch_size]
-            y_batch = np.array([1] * batch_size)
-            t_disc_loss = discriminator.train_on_batch(image_batch,y_batch)
-
-
-            # Train D on fake images
             noise = np.random.normal(0, 1, (batch_size, latent_size))
             generated_images = generator.predict(noise, verbose=0)
-            y_generated = np.array([fake_label] * batch_size)
-            epoch_disc_loss.append(t_disc_loss +
-                    discriminator.train_on_batch(generated_images, y_generated))
-
-            # Clip weights for WGAN
-            if args.network_type == 'wgan':
-                weights = [np.clip(w, -0.01, 0.01) for w in discriminator.get_weights()]
-                discriminator.set_weights(weights)
+            pos_y_batch = np.array([1] * batch_size)
+            neg_y_batch = np.asarray([fake_label] * batch_size)
+            dummy_y = np.zeros((batch_size, 1), dtype=np.float32)
+            epoch_disc_loss.append(discriminator_model.train_on_batch([image_batch, generated_images], [pos_y_batch, neg_y_batch, dummy_y]))
 
             if (1 + index) % args.train_G_interval == 0:
                 # Train G
-                utils.set_trainability(discriminator, False)
+                utils.set_trainability(discriminator_model, False)
                 noise = np.random.normal(0, 1, (2 * batch_size, latent_size))
                 trick =  np.ones(2 * batch_size)
                 epoch_gen_loss.append(combined.train_on_batch(noise, trick))
@@ -157,9 +167,10 @@ if __name__ == '__main__':
         # Evaluate the testing loss of D
         noise = np.random.normal(0, 1, (num_test, latent_size))
         generated_images = generator.predict(noise, verbose=False)
-        X = np.concatenate((X_test, generated_images))
-        y = np.array([1] * num_test + [fake_label] * num_test)
-        discriminator_test_loss = discriminator.evaluate(X, y, verbose=False)
+        pos_y = np.array([1] * num_test)
+        neg_y = np.asarray([fake_label] * num_test)
+        d_y = np.zeros((num_test, 1), dtype=np.float32)
+        discriminator_test_loss = discriminator_model.evaluate([X_test, generated_images], [pos_y, neg_y, d_y], verbose=False)
         discriminator_train_loss = np.mean(np.array(epoch_disc_loss), axis=0)
 
         # Evaluate the testing loss of G
@@ -174,14 +185,14 @@ if __name__ == '__main__':
         test_history['generator'].append(generator_test_loss)
         test_history['discriminator'].append(discriminator_test_loss)
 
-        print('{0:<22s} | {1:4s} '.format('component', discriminator.metrics_names))
+        print('{0:<22s} | {1:4s} '.format('component', discriminator_model.metrics_names))
         print('-' * 65)
 
         ROW_FMT = '{0:<22s} | {1:<4.2f}'
         print(ROW_FMT.format('generator (train)', train_history['generator'][-1]))
         print(ROW_FMT.format('generator (test)', test_history['generator'][-1]))
-        print(ROW_FMT.format('discriminator (train)', train_history['discriminator'][-1]))
-        print(ROW_FMT.format('discriminator (test)', test_history['discriminator'][-1]))
+        print(ROW_FMT.format('discriminator (train)', train_history['discriminator'][-1][0]))
+        print(ROW_FMT.format('discriminator (test)', test_history['discriminator'][-1][0]))
 
         # Save weights every epoch
         generator.save(
