@@ -17,7 +17,6 @@ from keras.layers import Input
 from keras.models import Model
 from keras.utils.generic_utils import Progbar
 import theano.tensor as T
-import models as models
 import utils as utils
 from optimizer import *
 
@@ -36,12 +35,22 @@ def parse_args():
     parser.add_argument("--g_interval", dest='train_G_interval', type=int, default=1)
     parser.add_argument("-t", dest='network_type', default='GAN')
     parser.add_argument("-b", dest='batch_size', type=int, default=128)
+    parser.add_argument("-e", dest='epoches', type=int, default=50)
+    parser.add_argument("-p", dest='gradient_penalty', type=float, default=0.01)
+    parser.add_argument("-g", dest='gaussian_task', default=False, action='store_true')
+    parser.add_argument("--lt", dest='latent_size', default=50, type=int)
 
     return parser.parse_args()
 
 if __name__ == '__main__':
 
     args = parse_args()
+
+    if args.gaussian_task:
+        import gaussian_models as models
+        print('gaussian')
+    else:
+        import models as models
 
     if args.schedule not in ['None', 'adagrad']:
         raise ValueError('args.schedule {} not recognized'.format(args.schedule))
@@ -58,11 +67,11 @@ if __name__ == '__main__':
             f.write('\n'.join(sys.argv[1:]))
 
     # Parameters that matter less
-    epochs = 50
+    epochs = args.epoches
     batch_size = args.batch_size
-    latent_size = 50
+    latent_size = args.latent_size
     numdisplay = 100000
-    GRADIENT_PENALTY_WEIGHT = 0.01
+    GRADIENT_PENALTY_WEIGHT = args.gradient_penalty
 
     # Optimizer
     if args.optimizer == 'SGD':
@@ -125,6 +134,7 @@ if __name__ == '__main__':
 
     discriminator_model.compile(optimizer=d_optim,
                           loss=[loss_func, loss_func, partial_gp_loss])
+
 
     # Training
     train_history = defaultdict(list)
