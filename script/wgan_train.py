@@ -5,7 +5,7 @@ from __future__ import print_function
 from collections import defaultdict
 from six.moves import range
 import numpy as np, sys, argparse, cPickle as pickle
-from os.path import join,exists
+from os.path import join, exists, abspath, dirname
 from os import system, makedirs
 
 from PIL import Image
@@ -37,8 +37,9 @@ def parse_args():
     parser.add_argument("-b", dest='batch_size', type=int, default=128)
     parser.add_argument("-e", dest='epoches', type=int, default=50)
     parser.add_argument("-p", dest='gradient_penalty', type=float, default=0.01)
-    parser.add_argument("-g", dest='gaussian_task', default=False, action='store_true')
+    parser.add_argument("-m", dest='modelfile', type=str)
     parser.add_argument("--lt", dest='latent_size', default=50, type=int)
+    parser.add_argument("-n", dest='noise_distr', default='normal', type=str)
 
     return parser.parse_args()
 
@@ -46,11 +47,11 @@ if __name__ == '__main__':
 
     args = parse_args()
 
-    if args.gaussian_task:
-        import gaussian_models as models
-        print('gaussian')
-    else:
-        import models as models
+    system('cp ' + args.modelfile + ' ' + join(abspath(dirname(__file__)), 'modelfile.py'))
+    import  modelfile as models
+    noise_distr_map = {'normal':(np.random.normal, 0, 1), 'uniform':(np.random.uniform, 1, 2)}
+    noise_distr = noise_distr_map[args.noise_distr][0]
+    noise_distr_param = noise_distr_map[args.noise_distr][1:]
 
     if args.schedule not in ['None', 'adagrad']:
         raise ValueError('args.schedule {} not recognized'.format(args.schedule))
@@ -158,7 +159,7 @@ if __name__ == '__main__':
             # Train D on real images
             utils.set_trainability(discriminator_model, True)
             image_batch = X_train[index * batch_size:(index + 1) * batch_size]
-            noise = np.random.normal(0, 1, (batch_size, latent_size))
+            noise = noise_distr(noise_distr_param[0], noise_distr_param[1], (batch_size, latent_size))
             generated_images = generator.predict(noise, verbose=0)
             pos_y_batch = np.array([1] * batch_size)
             neg_y_batch = np.asarray([fake_label] * batch_size)
@@ -168,14 +169,14 @@ if __name__ == '__main__':
             if (1 + index) % args.train_G_interval == 0:
                 # Train G
                 utils.set_trainability(discriminator_model, False)
-                noise = np.random.normal(0, 1, (2 * batch_size, latent_size))
+                noise = noise_distr(noise_distr_param[0], noise_distr_param[1], (2 * batch_size, latent_size))
                 trick =  np.ones(2 * batch_size)
                 epoch_gen_loss.append(combined.train_on_batch(noise, trick))
 
         print('\nTesting for epoch {}:'.format(epoch + 1))
 
         # Evaluate the testing loss of D
-        noise = np.random.normal(0, 1, (num_test, latent_size))
+        noise = noise_distr(noise_distr_param[0], noise_distr_param[1], (num_test, latent_size))
         generated_images = generator.predict(noise, verbose=False)
         pos_y = np.array([1] * num_test)
         neg_y = np.asarray([fake_label] * num_test)
@@ -184,7 +185,7 @@ if __name__ == '__main__':
         discriminator_train_loss = np.mean(np.array(epoch_disc_loss), axis=0)
 
         # Evaluate the testing loss of G
-        noise = np.random.normal(0, 1, (2 * num_test, latent_size))
+        noise = noise_distr(noise_distr_param[0], noise_distr_param[1], (2 * num_test, latent_size))
         trick = np.ones(2 * num_test)
         generator_test_loss = combined.evaluate(noise, trick, verbose=False)
         generator_train_loss = np.mean(np.array(epoch_gen_loss), axis=0)
@@ -211,7 +212,7 @@ if __name__ == '__main__':
             join(outdir,'params_discriminator_epoch_{0:03d}.hdf5'.format(epoch)), True)
 
         # Generate some digits to display
-        noise = np.random.normal(0, 1, (numdisplay, latent_size))
+        noise = noise_distr(noise_distr_param[0], noise_distr_param[1], (numdisplay, latent_size))
 
         generated_images = generator.predict(noise, verbose=0)
         pickle.dump(generated_images, open(join(outdir, 'samples_epoch_{0:03d}_generated.pkl'.format(epoch)),'wb'))

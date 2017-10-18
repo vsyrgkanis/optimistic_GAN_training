@@ -5,7 +5,7 @@ from __future__ import print_function
 from collections import defaultdict
 from six.moves import range
 import numpy as np, sys, argparse, cPickle as pickle
-from os.path import join,exists
+from os.path import join, exists, abspath, dirname
 from os import system, makedirs
 
 from PIL import Image
@@ -35,7 +35,7 @@ def parse_args():
     parser.add_argument("-t", dest='network_type', default='GAN')
     parser.add_argument("-b", dest='batch_size', type=int, default=128)
     parser.add_argument("-e", dest='epoches', type=int, default=50)
-    parser.add_argument("-g", dest='gaussian_task', default=False, action='store_true')
+    parser.add_argument("-m", dest='modelfile', default=False, action='store_true')
     parser.add_argument("--lt", dest='latent_size', default=50, type=int)
 
     return parser.parse_args()
@@ -44,11 +44,8 @@ if __name__ == '__main__':
 
     args = parse_args()
 
-    if args.gaussian_task:
-        import gaussian_models as models
-        print('gaussian')
-    else:
-        import models as models
+    system('cp ' + args.modelfile + ' ' + join(abspath(dirname(__file__)), 'modelfile.py'))
+    import  modelfile as models
 
     if args.schedule not in ['None', 'adagrad']:
         raise ValueError('args.schedule {} not recognized'.format(args.schedule))
