@@ -40,6 +40,10 @@ def parse_args():
     parser.add_argument("-m", dest='modelfile', type=str)
     parser.add_argument("--lt", dest='latent_size', default=50, type=int)
     parser.add_argument("-n", dest='noise_distr', default='normal', type=str)
+    parser.add_argument("--momentum", default=0, type=float)
+    parser.add_argument("--nesterov", action='store_true')
+    parser.add_argument("--ndisplay", default=100000, type=int)
+    parser.add_argument("--normalized", action='store_true')
 
     return parser.parse_args()
 
@@ -71,13 +75,13 @@ if __name__ == '__main__':
     epochs = args.epoches
     batch_size = args.batch_size
     latent_size = args.latent_size
-    numdisplay = 100000
+    numdisplay = args.ndisplay
     GRADIENT_PENALTY_WEIGHT = args.gradient_penalty
 
     # Optimizer
     if args.optimizer == 'SGD':
-        d_optim = Adagrad(lr=args.optimizer_lr) if schedule == 'adagrad' else SGD(lr=args.optimizer_lr)
-        g_optim = Adagrad(lr=args.optimizer_lr) if schedule == 'adagrad' else SGD(lr=args.optimizer_lr)
+        d_optim = Adagrad(lr=args.optimizer_lr) if schedule == 'adagrad' else SGD(lr=args.optimizer_lr, momentum=args.momentum, nesterov=args.nesterov)
+        g_optim = Adagrad(lr=args.optimizer_lr) if schedule == 'adagrad' else SGD(lr=args.optimizer_lr, momentum=args.momentum, nesterov=args.nesterov)
     else:
         optim_mapper = {
                 'OFRL': OFRL,
@@ -95,8 +99,10 @@ if __name__ == '__main__':
 
     # Load the data
     (X_train, y_train), (X_test, y_test) = utils.load_data(join(args.datadir, 'embed/CV0'))
-    X_train = (X_train.astype(np.float32) - 0.5) / 0.5
-    X_test = (X_test.astype(np.float32) - 0.5) / 0.5
+    if not args.normalized:
+        print('Now normalize the input data')
+        X_train = (X_train.astype(np.float32) - 0.5) / 0.5
+    	X_test = (X_test.astype(np.float32) - 0.5) / 0.5
     num_train, num_test = X_train.shape[0], X_test.shape[0]
 
     # build the discriminator
