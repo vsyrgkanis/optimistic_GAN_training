@@ -32,7 +32,7 @@ def parse_args():
     parser.add_argument("--optimizer")
     parser.add_argument("--lr", dest='optimizer_lr', type=float, default=5e-3)
     parser.add_argument("-v", dest='version', type=int)
-    parser.add_argument("-s", dest='schedule')
+    parser.add_argument("-s", dest='schedule', default='None')
     parser.add_argument("--g_interval", dest='train_G_interval', type=int, default=5)
     parser.add_argument("-t", dest='network_type', default='wgan')
     parser.add_argument("-b", dest='batch_size', type=int, default=512)
