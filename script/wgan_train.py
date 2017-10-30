@@ -19,6 +19,7 @@ from keras.utils.generic_utils import Progbar
 import theano.tensor as T
 import utils as utils
 from optimizer import *
+import  models
 
 K.set_image_data_format('channels_first')
 
@@ -26,18 +27,17 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("-d", dest='datadir')
     parser.add_argument("-o", dest='outdir')
-    parser.add_argument("-l", dest='seqlen', type=int)
-    parser.add_argument("-c", dest='nchannel', type=int)
+    parser.add_argument("-l", dest='seqlen', type=int, default=6)
+    parser.add_argument("-c", dest='nchannel', type=int, default=4)
     parser.add_argument("--optimizer")
-    parser.add_argument("--lr", dest='optimizer_lr', type=float)
+    parser.add_argument("--lr", dest='optimizer_lr', type=float, default=5e-3)
     parser.add_argument("-v", dest='version', type=int)
     parser.add_argument("-s", dest='schedule')
-    parser.add_argument("--g_interval", dest='train_G_interval', type=int, default=1)
-    parser.add_argument("-t", dest='network_type', default='GAN')
-    parser.add_argument("-b", dest='batch_size', type=int, default=128)
-    parser.add_argument("-e", dest='epoches', type=int, default=50)
+    parser.add_argument("--g_interval", dest='train_G_interval', type=int, default=5)
+    parser.add_argument("-t", dest='network_type', default='wgan')
+    parser.add_argument("-b", dest='batch_size', type=int, default=512)
+    parser.add_argument("-e", dest='epoches', type=int, default=100)
     parser.add_argument("-p", dest='gradient_penalty', type=float, default=0.01)
-    parser.add_argument("-m", dest='modelfile', type=str)
     parser.add_argument("--lt", dest='latent_size', default=50, type=int)
     parser.add_argument("-n", dest='noise_distr', default='normal', type=str)
     parser.add_argument("--momentum", default=0, type=float)
@@ -51,8 +51,6 @@ if __name__ == '__main__':
 
     args = parse_args()
 
-    system('cp ' + args.modelfile + ' ' + join(abspath(dirname(__file__)), 'modelfile.py'))
-    import  modelfile as models
     noise_distr_map = {'normal':(np.random.normal, 0, 1), 'uniform':(np.random.uniform, 1, 2)}
     noise_distr = noise_distr_map[args.noise_distr][0]
     noise_distr_param = noise_distr_map[args.noise_distr][1:]
