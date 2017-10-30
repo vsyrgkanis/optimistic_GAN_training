@@ -1,2 +1,0 @@
-python ../KL.py ../../data/motifs/ATAGGC.pwm 50 6 ../../runs/motif_spikein_ATAGGC_SGD_5e-03
-python ../KL.py ../../data/motifs/ATAGGC.pwm 50 6 ../../runs/motif_spikein_ATAGGC_SGD_v4_5e-03

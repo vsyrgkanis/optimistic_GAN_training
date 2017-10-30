@@ -1,1 +1,0 @@
-/data/CV0/valid.h5.batch1
