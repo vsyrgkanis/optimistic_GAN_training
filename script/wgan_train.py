@@ -37,7 +37,7 @@ def parse_args():
     parser.add_argument("-t", dest='network_type', default='wgan')
     parser.add_argument("-b", dest='batch_size', type=int, default=512)
     parser.add_argument("-e", dest='epoches', type=int, default=100)
-    parser.add_argument("-p", dest='gradient_penalty', type=float, default=0.01)
+    parser.add_argument("-p", dest='gradient_penalty', type=float, default=1e-04)
     parser.add_argument("--lt", dest='latent_size', default=50, type=int)
     parser.add_argument("-n", dest='noise_distr', default='normal', type=str)
     parser.add_argument("--momentum", default=0, type=float)
