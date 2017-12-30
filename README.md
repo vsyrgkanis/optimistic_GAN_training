@@ -1,5 +1,5 @@
 # Training GANs with Optimism
-Code for reproducing results in [Training GANs with Optimism]()
+Code for reproducing results in [Training GANs with Optimism](https://arxiv.org/abs/1711.00141)
 
 Hereinafter,  `REPO_HOME` is used to denote the path to this repository.
 
