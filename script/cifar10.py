@@ -222,13 +222,18 @@ else:
             'OFRL': OFRL,
             'OMDA': OMDA,
             'optimAdam': optimAdam,
+            'optimAdagrad': optimAdagrad,
             }
-    if args.optimizer != 'optimAdam':
-        d_optim = optim_mapper[args.optimizer](lr=args.optimizer_lr, version=args.version, schedule=args.schedule)
-        g_optim = optim_mapper[args.optimizer](lr=args.optimizer_lr, version=args.version, schedule=args.schedule)
-    else:
+    if args.optimizer == 'optimAdam':
         d_optim = optim_mapper[args.optimizer](lr=args.optimizer_lr, beta_1=args.beta_1, beta_2=args.beta_2)
         g_optim = optim_mapper[args.optimizer](lr=args.optimizer_lr, beta_1=args.beta_1, beta_2=args.beta_2)
+    elif args.optimizer == 'optimAdagrad':
+        d_optim = optim_mapper[args.optimizer](lr=args.optimizer_lr)
+        g_optim = optim_mapper[args.optimizer](lr=args.optimizer_lr)
+    else:
+        d_optim = optim_mapper[args.optimizer](lr=args.optimizer_lr, version=args.version, schedule=args.schedule)
+        g_optim = optim_mapper[args.optimizer](lr=args.optimizer_lr, version=args.version, schedule=args.schedule)
+
 
 
 # We use the Adam paramaters from Gulrajani et al.

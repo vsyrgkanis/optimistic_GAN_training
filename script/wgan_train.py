@@ -44,6 +44,8 @@ def parse_args():
     parser.add_argument("--nesterov", action='store_true')
     parser.add_argument("--ndisplay", default=100000, type=int)
     parser.add_argument("--normalized", action='store_true')
+    parser.add_argument("--beta_1", default=0.5, type=float)
+    parser.add_argument("--beta_2", default=0.9, type=float)
 
     return parser.parse_args()
 
@@ -55,7 +57,7 @@ if __name__ == '__main__':
     noise_distr = noise_distr_map[args.noise_distr][0]
     noise_distr_param = noise_distr_map[args.noise_distr][1:]
 
-    if args.schedule not in ['None', 'adagrad']:
+    if args.schedule not in ['None', 'adagrad', 'adam']:
         raise ValueError('args.schedule {} not recognized'.format(args.schedule))
     schedule = args.schedule if args.schedule != 'None' else None
 
@@ -65,7 +67,7 @@ if __name__ == '__main__':
         system('rm -r ' + outdir)
     makedirs(outdir)
     system('cp ' + __file__ + ' '+ outdir)
-    system('cp ' + 'models.py' + ' '+ outdir)
+    system('cp ' + join(dirname(abspath(__file__)), 'models.py') + ' '+ outdir)
     with open(join(outdir, 'commandline_args.txt'), 'w') as f:
             f.write('\n'.join(sys.argv[1:]))
 
@@ -78,15 +80,25 @@ if __name__ == '__main__':
 
     # Optimizer
     if args.optimizer == 'SGD':
-        d_optim = Adagrad(lr=args.optimizer_lr) if schedule == 'adagrad' else SGD(lr=args.optimizer_lr, momentum=args.momentum, nesterov=args.nesterov)
-        g_optim = Adagrad(lr=args.optimizer_lr) if schedule == 'adagrad' else SGD(lr=args.optimizer_lr, momentum=args.momentum, nesterov=args.nesterov)
+        if args.schedule == 'adam':
+	    d_optim = Adam(args.optimizer_lr, beta_1=args.beta_1, beta_2=args.beta_2)
+	    g_optim = Adam(args.optimizer_lr, beta_1=args.beta_1, beta_2=args.beta_2)
+	else:
+            d_optim = Adagrad(lr=args.optimizer_lr) if schedule == 'adagrad' else SGD(lr=args.optimizer_lr, momentum=args.momentum, nesterov=args.nesterov)
+            g_optim = Adagrad(lr=args.optimizer_lr) if schedule == 'adagrad' else SGD(lr=args.optimizer_lr, momentum=args.momentum, nesterov=args.nesterov)
     else:
         optim_mapper = {
                 'OFRL': OFRL,
                 'OMDA': OMDA,
+                'optimAdam': optimAdam,
                 }
-        d_optim = optim_mapper[args.optimizer](lr=args.optimizer_lr, version=args.version, schedule=schedule)
-        g_optim = optim_mapper[args.optimizer](lr=args.optimizer_lr, version=args.version, schedule=schedule)
+        if args.optimizer != 'optimAdam':
+            print ('s1', args.version, args.optimizer_lr)
+	    d_optim = optim_mapper[args.optimizer](lr=args.optimizer_lr, version=args.version, schedule=schedule)
+            g_optim = optim_mapper[args.optimizer](lr=args.optimizer_lr, version=args.version, schedule=schedule)
+	else:
+	    d_optim = optim_mapper[args.optimizer](lr=args.optimizer_lr, beta_1=args.beta_1, beta_2=args.beta_2)
+            g_optim = optim_mapper[args.optimizer](lr=args.optimizer_lr, beta_1=args.beta_1, beta_2=args.beta_2)
 
     # Loss related (wgan is different from regular gan)
     if args.network_type not in ['wgan', 'gan']:

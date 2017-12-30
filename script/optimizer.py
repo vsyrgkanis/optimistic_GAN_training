@@ -33,12 +33,13 @@ class OFRL(Optimizer):
         grad_sqr_accum = [K.zeros(shape) for shape in shapes]
         scheduler = [K.ones(shape) for shape in shapes]
         self.weights = [self.iterations] + predictable
+        t = K.cast(self.iterations, K.floatx()) + 1
         for p, g, m, a, s in zip(params, grads, predictable, grad_sqr_accum, scheduler):
             # Update M
             if self.version == 1:
                 new_m = g
             elif self.version == 2:
-                new_m = (m * self.iteration + g) / (self.interation+1)
+                new_m = (m * (t - 1) + g) / t
             elif self.version == 3:
                 new_m = m * self.m_rho + (1-self.m_rho) * g
             else:
@@ -86,12 +87,10 @@ class OFRL(Optimizer):
         return dict(list(base_config.items()) + list(config.items()))
 
 class OMDA(OFRL):
-    def __init__(self, lr=0.01, version=1., decay=0.,
-                 schedule=None, m_rho=0.1, adagrad_epsilon=1e-08, **kwargs):
-        super(OMDA, self).__init__(**kwargs)
 
     def update_param(self, p, g, lr, m, new_m, s, new_s):
         return p + lr * (s * m - s * g - new_s * new_m)
+
 
 class optimAdam(Optimizer):
     """Adam optimizer.
@@ -162,5 +161,62 @@ class optimAdam(Optimizer):
                   'beta_2': float(K.get_value(self.beta_2)),
                   'decay': float(K.get_value(self.decay)),
                   'epsilon': self.epsilon}
-        base_config = super(Adam, self).get_config()
+        base_config = super(optimAdam, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
+
+class optimAdagrad(Optimizer):
+    """Adagrad optimizer.
+    It is recommended to leave the parameters of this optimizer
+    at their default values.
+    # Arguments
+        lr: float >= 0. Learning rate.
+        epsilon: float >= 0. If `None`, defaults to `K.epsilon()`.
+        decay: float >= 0. Learning rate decay over each update.
+    # References
+        - [Adaptive Subgradient Methods for Online Learning and Stochastic Optimization](http://www.jmlr.org/papers/volume12/duchi11a/duchi11a.pdf)
+    """
+
+    def __init__(self, lr=0.01, epsilon=None, decay=0., **kwargs):
+        super(optimAdagrad, self).__init__(**kwargs)
+        with K.name_scope(self.__class__.__name__):
+            self.lr = K.variable(lr, name='lr')
+            self.decay = K.variable(decay, name='decay')
+            self.iterations = K.variable(0, dtype='int64', name='iterations')
+        if epsilon is None:
+            epsilon = K.epsilon()
+        self.epsilon = epsilon
+        self.initial_decay = decay
+
+    @interfaces.legacy_get_updates_support
+    def get_updates(self, loss, params):
+        grads = self.get_gradients(loss, params)
+        shapes = [K.int_shape(p) for p in params]
+        accumulators = [K.zeros(shape) for shape in shapes]
+        self.weights = accumulators
+        self.updates = [K.update_add(self.iterations, 1)]
+
+        lr = self.lr
+        if self.initial_decay > 0:
+            lr *= (1. / (1. + self.decay * K.cast(self.iterations,
+                                                  K.dtype(self.decay))))
+
+        for p, g, a in zip(params, grads, accumulators):
+            new_a = a + K.square(g)  # update accumulator
+            new_p = p - lr * g / (K.sqrt(new_a) + self.epsilon) + lr * g * K.clip(K.cast(self.iterations, K.floatx())-1, 0, 1) * (1 / (K.sqrt(a) + self.epsilon) - 1 / (K.sqrt(new_a) + self.epsilon))
+            self.updates.append(K.update(a, new_a))
+
+            # Apply constraints.
+            if getattr(p, 'constraint', None) is not None:
+                new_p = p.constraint(new_p)
+
+            self.updates.append(K.update(p, new_p))
+
+        return self.updates
+
+    def get_config(self):
+        config = {'lr': float(K.get_value(self.lr)),
+                  'decay': float(K.get_value(self.decay)),
+                  'epsilon': self.epsilon}
+        base_config = super(optimAdagrad, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
