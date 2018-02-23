@@ -28,7 +28,7 @@ cd script/
 
 for RUN in {0..49}
 do
-	for LR in '5e-03' '5e-04' '5e-05'
+	for LR in '5e-02' '5e-03' '5e-04'
 	do
 		
 		# SGD
@@ -47,6 +47,18 @@ do
 		KERAS_BACKEND=theano python wgan_train.py -d $DATADIR/run$RUN -o DNA/run$RUN/nesterov_lr$LR \
 			--optimizer SGD  --momentum 0.9 --nesterov  --lr $LR
 
+		# SGD with Adam
+		KERAS_BACKEND=theano python wgan_train.py -d $DATADIR/run$RUN -o DNA/run$RUN/adam_lr$LR \
+		    --optimizer SGD  -s adam --lr $LR
+
+		# optimAdam
+		KERAS_BACKEND=theano python wgan_train.py -d $DATADIR/run$RUN -o DNA/run$RUN/optimAdam_lr$LR \
+		    --optimizer optimAdam  --lr $LR
+
+		# optimAdam with 1:1 training ratio
+		KERAS_BACKEND=theano python wgan_train.py -d $DATADIR/run$RUN -o DNA/run$RUN/optimAdam_ratio1_lr$LR \
+		    --optimizer optimAdam  --g_interval 1 --lr $LR
+		
 		# SOMD (3 different versions)
 		KERAS_BACKEND=theano python wgan_train.py -d $DATADIR/run$RUN -o DNA/run$RUN/SOMDv1_lr$LR \
 			--optimizer OMDA  -v 1 --lr $LR
